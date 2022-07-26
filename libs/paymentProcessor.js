@@ -374,8 +374,6 @@ function SetupForPool(logger, poolOptions, setupFinished){
                                 logger.warning(logSystem, logComponent, 'Cannot send reward to invalid address '
                                 + w + '. Fix worker address in the database or enable address validation to disallow connection for invalid workers');
                             }
-                            worker.sent = addressAmounts[address] = satoshisToCoins(toSend);
-                            worker.balanceChange = Math.min(worker.balance, toSend) * -1;
                         }
                         else {
                             worker.balanceChange = Math.max(toSend - worker.balance, 0);
