@@ -49,6 +49,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
     var processingConfig = poolOptions.paymentProcessing;
 
     var logSystem = 'Payments';
+    var xbtxAddrTemplate = /(R)[A-HJ-NP-Za-km-z1-9]{33}/
     var logComponent = coin;
 
     var daemon = new Stratum.daemon.interface([processingConfig.daemon], function(severity, message){
@@ -359,8 +360,20 @@ function SetupForPool(logger, poolOptions, setupFinished){
                         worker.reward = worker.reward || 0;
                         var toSend = (worker.balance + worker.reward) * (1 - withholdPercent);
                         if (toSend >= minPaymentSatoshis) {
-                            totalSent += toSend;
-                            var address = worker.address = (worker.address || getProperAddress(w));
+                            worker.address = w;
+                            var address = getProperAddress(w);
+                            if (address) {
+                                totalSent += toSend;
+                                worker.address = address;
+                                worker.sent = addressAmounts[address] = satoshisToCoins(toSend);
+                                worker.balanceChange = Math.min(worker.balance, toSend) * -1;
+                            } else {
+                                // as it states from the method description
+                                worker.balanceChange = Math.max(toSend - worker.balance, 0);
+                                worker.sent = 0;
+                                logger.warning(logSystem, logComponent, 'Cannot send reward to invalid address '
+                                + w + '. Fix worker address in the database or enable address validation to disallow connection for invalid workers');
+                            }
                             worker.sent = addressAmounts[address] = satoshisToCoins(toSend);
                             worker.balanceChange = Math.min(worker.balance, toSend) * -1;
                         }
@@ -516,8 +529,13 @@ function SetupForPool(logger, poolOptions, setupFinished){
     var getProperAddress = function(address){
         if (address.length === 40){
             return util.addressFromEx(poolOptions.address, address);
+        } else {
+            let result = address.match(xbtxAddrTemplate) || [];
+            if (result.length !== 0) {
+                return result[0];
+            }
         }
-        else return address;
+        return null; // only if address is not a valid xbtx address
     };
 
 
