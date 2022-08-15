@@ -525,14 +525,13 @@ function SetupForPool(logger, poolOptions, setupFinished){
 
 
     var getProperAddress = function(address){
-        if (address.length === 40){
+        let result = address.match(xbtxAddrTemplate) || [];
+        if (result.length !== 0) {
+            return result[0];
+        } else if (address.length === 40) {
             return util.addressFromEx(poolOptions.address, address);
-        } else {
-            let result = address.match(xbtxAddrTemplate) || [];
-            if (result.length !== 0) {
-                return result[0];
-            }
         }
+
         return null; // only if address is not a valid xbtx address
     };
 
