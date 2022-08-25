@@ -50,6 +50,8 @@ function SetupForPool(logger, poolOptions, setupFinished){
 
     var logSystem = 'Payments';
     var xbtxAddrTemplate = /(R)[A-HJ-NP-Za-km-z1-9]{33}/
+    var workerPerPaymentDefault = 10;
+    var maxWorkerPerPayment = processingConfig.maxWorkersPerPayment || workerPerPaymentDefault
     var logComponent = coin;
 
     var daemon = new Stratum.daemon.interface([processingConfig.daemon], function(severity, message){
@@ -355,6 +357,10 @@ function SetupForPool(logger, poolOptions, setupFinished){
                     var addressAmounts = {};
                     var totalSent = 0;
                     for (var w in workers) {
+                        if (Object.keys(addressAmounts).length === maxWorkerPerPayment){
+                            break;
+                        }  
+                        
                         var worker = workers[w];
                         worker.balance = worker.balance || 0;
                         worker.reward = worker.reward || 0;
@@ -381,6 +387,8 @@ function SetupForPool(logger, poolOptions, setupFinished){
                         }
                     }
 
+                    logger.debug(logSystem, logComponent, 'Total send calculated as ' + totalSent / magnitude + '. To: ' + JSON.stringify(addressAmounts));
+
                     if (Object.keys(addressAmounts).length === 0){
                         callback(null, workers, rounds);
                         return;
@@ -391,7 +399,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
                         if (result.error && result.error.code === -6) {
                             var higherPercent = withholdPercent + 0.01;
                             logger.warning(logSystem, logComponent, 'Not enough funds to cover the tx fees for sending out payments, decreasing rewards by '
-                                + (higherPercent * 100) + '% and retrying');
+                                + (higherPercent * 100) + '% and retrying. Original error: ' + JSON.stringify(result.error));
                             trySend(higherPercent);
                         }
                         else if (result.error) {
