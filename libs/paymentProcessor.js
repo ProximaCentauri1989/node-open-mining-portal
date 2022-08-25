@@ -49,6 +49,9 @@ function SetupForPool(logger, poolOptions, setupFinished){
     var processingConfig = poolOptions.paymentProcessing;
 
     var logSystem = 'Payments';
+    var xbtxAddrTemplate = /(R)[A-HJ-NP-Za-km-z1-9]{33}/
+    var workerPerPaymentDefault = 10;
+    var maxWorkerPerPayment = parseInt(processingConfig.maxWorkersPerPayment || workerPerPaymentDefault);
     var logComponent = coin;
 
     var daemon = new Stratum.daemon.interface([processingConfig.daemon], function(severity, message){
@@ -354,21 +357,37 @@ function SetupForPool(logger, poolOptions, setupFinished){
                     var addressAmounts = {};
                     var totalSent = 0;
                     for (var w in workers) {
+                        if (Object.keys(addressAmounts).length === maxWorkerPerPayment){
+                            break;
+                        }  
+                        
                         var worker = workers[w];
                         worker.balance = worker.balance || 0;
                         worker.reward = worker.reward || 0;
                         var toSend = (worker.balance + worker.reward) * (1 - withholdPercent);
                         if (toSend >= minPaymentSatoshis) {
-                            totalSent += toSend;
-                            var address = worker.address = (worker.address || getProperAddress(w));
-                            worker.sent = addressAmounts[address] = satoshisToCoins(toSend);
-                            worker.balanceChange = Math.min(worker.balance, toSend) * -1;
+                            worker.address = w;
+                            var address = getProperAddress(w);
+                            if (address) {
+                                totalSent += toSend;
+                                worker.address = address;
+                                worker.sent = addressAmounts[address] = satoshisToCoins(toSend);
+                                worker.balanceChange = Math.min(worker.balance, toSend) * -1;
+                            } else {
+                                // as it states from the method description
+                                worker.balanceChange = Math.max(toSend - worker.balance, 0);
+                                worker.sent = 0;
+                                logger.warning(logSystem, logComponent, 'Cannot send reward to invalid address '
+                                + w + '. Fix worker address in the database or enable address validation to disallow connection for invalid workers');
+                            }
                         }
                         else {
                             worker.balanceChange = Math.max(toSend - worker.balance, 0);
                             worker.sent = 0;
                         }
                     }
+
+                    logger.debug(logSystem, logComponent, 'Total send calculated as ' + totalSent / magnitude + '. To: ' + JSON.stringify(addressAmounts));
 
                     if (Object.keys(addressAmounts).length === 0){
                         callback(null, workers, rounds);
@@ -380,7 +399,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
                         if (result.error && result.error.code === -6) {
                             var higherPercent = withholdPercent + 0.01;
                             logger.warning(logSystem, logComponent, 'Not enough funds to cover the tx fees for sending out payments, decreasing rewards by '
-                                + (higherPercent * 100) + '% and retrying');
+                                + (higherPercent * 100) + '% and retrying. Original error: ' + JSON.stringify(result.error));
                             trySend(higherPercent);
                         }
                         else if (result.error) {
@@ -514,10 +533,14 @@ function SetupForPool(logger, poolOptions, setupFinished){
 
 
     var getProperAddress = function(address){
-        if (address.length === 40){
+        let result = address.match(xbtxAddrTemplate) || [];
+        if (result.length !== 0) {
+            return result[0];
+        } else if (address.length === 40) {
             return util.addressFromEx(poolOptions.address, address);
         }
-        else return address;
+
+        return null; // only if address is not a valid xbtx address
     };
 
 
