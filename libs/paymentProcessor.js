@@ -51,7 +51,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
     var logSystem = 'Payments';
     var xbtxAddrTemplate = /(R)[A-HJ-NP-Za-km-z1-9]{33}/
     var workerPerPaymentDefault = 10;
-    var maxWorkerPerPayment = processingConfig.maxWorkersPerPayment || workerPerPaymentDefault
+    var maxWorkerPerPayment = parseInt(processingConfig.maxWorkersPerPayment || workerPerPaymentDefault);
     var logComponent = coin;
 
     var daemon = new Stratum.daemon.interface([processingConfig.daemon], function(severity, message){
